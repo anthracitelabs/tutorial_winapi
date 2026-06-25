@@ -142,3 +142,194 @@ BitmapInfo.bmiHeader.biHeight = -BitmapHeight; // negative value: top-down pitch
 ~~~~~~~~~~~~
 
 
+Graphics almost drawn:
+
+~~~~ C
+#include <windows.h>
+
+#include <stdint.h> // for predefined sized types
+#include <stdbool.h>
+
+
+static bool Running;
+static BITMAPINFO BitmapInfo;
+static void* BitmapMemory;
+
+static void Win32ResizeDIBSection(int Width, int Height)
+{
+	BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
+	BitmapInfo.bmiHeader.biWidth = Width;
+	BitmapInfo.bmiHeader.biHeight = -Height;
+	BitmapInfo.bmiHeader.biPlanes = 1;
+	BitmapInfo.bmiHeader.biBitCount = 32;
+	BitmapInfo.bmiHeader.biCompression = BI_RGB;
+
+	if (BitmapMemory) // Same as writing (BitmapMemory != 0) or (BitmapMemory != NULL)
+	{
+		VirtualFree(BitmapMemory, 0, MEM_RELEASE);
+		// Optionally, you can check if the result of VirtualFree is not zero.
+		// Print out an error message if it is.
+	}
+
+	int BytesPerPixel = 4;
+	int BitmapMemorySize = BytesPerPixel * (Width * Height);
+
+	BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	uint8_t *Row = (uint8_t *)BitmapMemory;
+	
+	for (int Y = 0; Y < Height; ++Y)
+	{
+		for(int X = 0; X < Width; ++X)
+		{
+			// Write color to pixel
+			//Pixel in memory: BB GG RR XX
+			//
+/*
+			// Byte 0, blue
+			*Pixel = 0;
+			++Pixel;  
+
+			// Byte 1, green
+			*Pixel = 0;
+			++Pixel;  
+
+			// Byte 2, red
+			*Pixel = 255;
+			++Pixel;  
+
+			// Byte 3, pad
+			*Pixel = 0;
+			++Pixel;  
+*/
+		}
+	}
+}
+
+static void Win32UpdateWindow(HDC DeviceContext, int Width, int Height)
+{
+    // StretchDIBits is a rectangle-to-rectangle image copy. If the destination rectangle is bigger, the image is increased, if not, shrunk down.
+    int result = StretchDIBits(DeviceContext, 
+                  0, 0, Width, Height,
+                  0, 0, Width, Height,
+                  BitmapMemory,
+                  &BitmapInfo,
+                  DIB_RGB_COLORS, SRCCOPY);   
+	int a = 0;
+
+}
+
+// Forward declaration of the window procedure callback function
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+// The application entry point (instead of main)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
+    
+    // 1. Register the Window Class
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc   = WindowProc;       // Pointer to the event handler function
+    wc.hInstance     = hInstance;        // Handle to the application instance
+    wc.lpszClassName = "Sample Window";       // Unique name identifying this class
+    RegisterClass(&wc);
+
+    // 2. Create the Window Instance
+    HWND Window = CreateWindowEx(
+        0,                               // Optional window styles
+        wc.lpszClassName,                      // Window class name
+        "My First WinAPI Window",       // Window title text
+        WS_OVERLAPPEDWINDOW,             // Standard window style (minimize, maximize, borders)
+
+        // Size and position (using default OS coordinates)
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+
+        NULL,       // Parent window    
+        NULL,       // Menu
+        hInstance,  // Instance handle
+        NULL        // Additional application data
+    );
+
+	if (Window)
+        {
+            // Window creation successful!
+            Running = true;
+
+            Win32ResizeDIBSection(640, 480);
+
+            while (Running) 
+            {
+		    MSG Message;
+		    while(PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
+		    {
+			    switch(Message.message)
+			    {
+				    case WM_QUIT:
+					    {
+						    Running = false;
+					    } break;
+
+				    default:
+					    {    
+						    TranslateMessage(&Message);
+						    DispatchMessage(&Message);
+					    } break;
+			    }
+		    }
+
+		    HDC DeviceContext = GetDC(Window);
+		    Win32UpdateWindow(DeviceContext, 640, 480);
+		    ShowWindow(Window, nCmdShow); 
+		    ReleaseDC(Window, DeviceContext);
+            }
+        }
+        else
+        {
+            // Window Creation failed! 
+        }
+
+    return 0;
+}
+
+// 5. The Window Procedure (handles events like clicking close, resizing, painting)
+LRESULT CALLBACK WindowProc(HWND Window, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_DESTROY:
+	    Running = false;
+            PostQuitMessage(0); // Signals the message loop to stop when the window closes
+            return 0;
+	
+	case WM_CLOSE:
+        {
+            Running = false;
+        } break;
+	
+	case WM_SIZE:
+        {
+            RECT ClientRect;
+            GetClientRect(Window, &ClientRect);
+            int Width = ClientRect.right - ClientRect.left;
+            int Height = ClientRect.bottom - ClientRect.top;
+            Win32ResizeDIBSection(Width, Height);
+        } break;
+
+        case WM_PAINT: {
+	    PAINTSTRUCT Paint;
+            HDC DeviceContext = BeginPaint(Window, &Paint);
+
+            int X = Paint.rcPaint.left;
+            int Y = Paint.rcPaint.top;
+            int Width = Paint.rcPaint.right - Paint.rcPaint.left;
+            int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
+            
+            Win32UpdateWindow(DeviceContext, Width, Height);
+
+            EndPaint(Window, &Paint);
+        } break;
+    }
+    // Pass any unhandled messages to default Windows behavior
+    return DefWindowProc(Window, uMsg, wParam, lParam);
+}
+~~~~
+
+
+
+
+
