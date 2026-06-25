@@ -236,7 +236,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         0,                               // Optional window styles
         wc.lpszClassName,                      // Window class name
         "My First WinAPI Window",       // Window title text
-        WS_OVERLAPPEDWINDOW,             // Standard window style (minimize, maximize, borders)
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,             // Standard window style (minimize, maximize, borders)
 
         // Size and position (using default OS coordinates)
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -276,7 +276,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
 		    HDC DeviceContext = GetDC(Window);
 		    Win32UpdateWindow(DeviceContext, 640, 480);
-		    ShowWindow(Window, nCmdShow); 
+		    //ShowWindow(Window, nCmdShow); // either this or the WS_VISIBLE flag when creating window!
 		    ReleaseDC(Window, DeviceContext);
             }
         }
