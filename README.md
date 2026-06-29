@@ -124,6 +124,11 @@ Memory is just a (giant) series of bytes, one following the other. On the other 
 
 What does it mean? If we want the rows to go sequentially from top-down, we need to update our BitmapInfo header height. Yo can see the assignment -BitmapHeight below.
 
+~~~~~~~~~~~~ cmd
+cl main.c user32.lib gdi32.lib winmm.lib
+main.exe
+~~~~~~~~~~~~
+
 Pixellated Graphics :
 
 ~~~~ C
