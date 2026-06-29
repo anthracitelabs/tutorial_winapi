@@ -56,10 +56,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine,
         "Sample Window",                      // Window class name
         "My First WinAPI Window",       // Window title text
         WS_OVERLAPPEDWINDOW,             // Standard window style (minimize, maximize, borders)
-
         // Size and position (using default OS coordinates)
         CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-
         NULL,       // Parent window    
         NULL,       // Menu
         hInstance,  // Instance handle
@@ -89,17 +87,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_DESTROY:
             PostQuitMessage(0); // Signals the message loop to stop when the window closes
             return 0;
-
-        /*case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            
-            // All custom window rendering/drawing goes here
-            //FillRect(hdc, &ps.rcPaint, (HBRUSH) (COLOR_WINDOW + 1));
-            
-            EndPaint(hwnd, &ps);
-            return 0;
-        }*/
     }
     // Pass any unhandled messages to default Windows behavior
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -135,14 +122,9 @@ Memory is just a (giant) series of bytes, one following the other. On the other 
 
 "The origin of a bottom-up DIB is the lower-left corner; the origin of a top-down DIB is the upper-left corner. [...] StretchDIBits creates a top-down image if the sign of the biHeight member of the BITMAPINFOHEADER structure for the DIB is negative."
 
-What does it mean? If we want the rows to go sequentially from top-down, we need to update our BitmapInfo header height. Let's do it now:
+What does it mean? If we want the rows to go sequentially from top-down, we need to update our BitmapInfo header height. Yo can see the assignment -BitmapHeight below.
 
-~~~~~~~~~~~~ C
-BitmapInfo.bmiHeader.biHeight = -BitmapHeight; // negative value: top-down pitch
-~~~~~~~~~~~~
-
-
-Graphics almost drawn:
+Pixellated Graphics :
 
 ~~~~ C
 #include <windows.h>
@@ -154,12 +136,18 @@ Graphics almost drawn:
 static bool Running;
 static BITMAPINFO BitmapInfo;
 static void* BitmapMemory;
+static int WindowWidth;
+static int WindowHeight;
+
+
+#define BUFFER_WIDTH	32
+#define BUFFER_HEIGHT	24
 
 static void Win32ResizeDIBSection(int Width, int Height)
 {
 	BitmapInfo.bmiHeader.biSize = sizeof(BitmapInfo.bmiHeader);
 	BitmapInfo.bmiHeader.biWidth = Width;
-	BitmapInfo.bmiHeader.biHeight = -Height;
+	BitmapInfo.bmiHeader.biHeight = -Height; // negative value: top-down pitch
 	BitmapInfo.bmiHeader.biPlanes = 1;
 	BitmapInfo.bmiHeader.biBitCount = 32;
 	BitmapInfo.bmiHeader.biCompression = BI_RGB;
@@ -175,47 +163,34 @@ static void Win32ResizeDIBSection(int Width, int Height)
 	int BitmapMemorySize = BytesPerPixel * (Width * Height);
 
 	BitmapMemory = VirtualAlloc(0, BitmapMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	uint8_t *Row = (uint8_t *)BitmapMemory;
+	uint32_t *Row = (uint32_t *)BitmapMemory;
+	uint32_t *Pixel = (uint32_t *)BitmapMemory;
+	
+	uint32_t ColorPattern[3] = { 0x00FF0000, 0x0000FF00, 0x000000FF };
+			// 32 bit variable assigned to memory as a whole	XX RR GG BB
+			// 8 bits variable assigned to memory by iteration	BB GG RR XX
 	
 	for (int Y = 0; Y < Height; ++Y)
 	{
 		for(int X = 0; X < Width; ++X)
 		{
 			// Write color to pixel
-			//Pixel in memory: BB GG RR XX
-			//
-/*
-			// Byte 0, blue
-			*Pixel = 0;
+			*Pixel = ColorPattern[(Y * Width + X) % 3];
 			++Pixel;  
-
-			// Byte 1, green
-			*Pixel = 0;
-			++Pixel;  
-
-			// Byte 2, red
-			*Pixel = 255;
-			++Pixel;  
-
-			// Byte 3, pad
-			*Pixel = 0;
-			++Pixel;  
-*/
 		}
+		++Row;
 	}
 }
 
-static void Win32UpdateWindow(HDC DeviceContext, int Width, int Height)
+static void Win32UpdateWindow(HDC DeviceContext)
 {
-    // StretchDIBits is a rectangle-to-rectangle image copy. If the destination rectangle is bigger, the image is increased, if not, shrunk down.
-    int result = StretchDIBits(DeviceContext, 
-                  0, 0, Width, Height,
-                  0, 0, Width, Height,
-                  BitmapMemory,
-                  &BitmapInfo,
-                  DIB_RGB_COLORS, SRCCOPY);   
-	int a = 0;
-
+	// StretchDIBits is a rectangle-to-rectangle image copy. If the destination rectangle is bigger, the image is increased, if not, shrunk down.
+	StretchDIBits(DeviceContext, 
+			0, 0, WindowWidth, WindowHeight,
+			0, 0, BUFFER_WIDTH, BUFFER_HEIGHT,
+			BitmapMemory,
+			&BitmapInfo,
+			DIB_RGB_COLORS, SRCCOPY);
 }
 
 // Forward declaration of the window procedure callback function
@@ -226,6 +201,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     
     // 1. Register the Window Class
     WNDCLASS wc = {0};
+    wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc   = WindowProc;       // Pointer to the event handler function
     wc.hInstance     = hInstance;        // Handle to the application instance
     wc.lpszClassName = "Sample Window";       // Unique name identifying this class
@@ -252,7 +228,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
             // Window creation successful!
             Running = true;
 
-            Win32ResizeDIBSection(640, 480);
+            Win32ResizeDIBSection(BUFFER_WIDTH, BUFFER_HEIGHT);
 
             while (Running) 
             {
@@ -275,8 +251,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 		    }
 
 		    HDC DeviceContext = GetDC(Window);
-		    Win32UpdateWindow(DeviceContext, 640, 480);
-		    //ShowWindow(Window, nCmdShow); // either this or the WS_VISIBLE flag when creating window!
+		    Win32UpdateWindow(DeviceContext);
+		    //ShowWindow(Window, nCmdShow); // either this or the WS_VISIBLE flag when creating window 
 		    ReleaseDC(Window, DeviceContext);
             }
         }
@@ -291,38 +267,41 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 // 5. The Window Procedure (handles events like clicking close, resizing, painting)
 LRESULT CALLBACK WindowProc(HWND Window, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
-        case WM_DESTROY:
-	    Running = false;
-            PostQuitMessage(0); // Signals the message loop to stop when the window closes
-            return 0;
-	
-	case WM_CLOSE:
-        {
-            Running = false;
-        } break;
-	
-	case WM_SIZE:
-        {
-            RECT ClientRect;
-            GetClientRect(Window, &ClientRect);
-            int Width = ClientRect.right - ClientRect.left;
-            int Height = ClientRect.bottom - ClientRect.top;
-            Win32ResizeDIBSection(Width, Height);
-        } break;
+		case WM_DESTROY:
+			Running = false;
+			PostQuitMessage(0); // Signals the message loop to stop when the window closes
+			return 0;
 
-        case WM_PAINT: {
-	    PAINTSTRUCT Paint;
-            HDC DeviceContext = BeginPaint(Window, &Paint);
+		case WM_CLOSE:
+			{
+				Running = false;
+			} break;
 
-            int X = Paint.rcPaint.left;
-            int Y = Paint.rcPaint.top;
-            int Width = Paint.rcPaint.right - Paint.rcPaint.left;
-            int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
-            
-            Win32UpdateWindow(DeviceContext, Width, Height);
+		case WM_SIZE:
+			{
+				// update width, height globals for StretchDIBits
+				RECT ClientRect;
+				GetClientRect(Window, &ClientRect);
+				WindowWidth = ClientRect.right - ClientRect.left;
+				WindowHeight = ClientRect.bottom - ClientRect.top;
+				
+				Win32ResizeDIBSection(BUFFER_WIDTH, BUFFER_HEIGHT);
+			} break;
 
-            EndPaint(Window, &Paint);
-        } break;
+		case WM_PAINT: // if this does not exist, a bigger resized section will not be painted, otherwise no major or functional effect 
+			{
+				PAINTSTRUCT Paint;
+				HDC DeviceContext = BeginPaint(Window, &Paint);
+
+				int X = Paint.rcPaint.left;
+				int Y = Paint.rcPaint.top;
+				int Width = Paint.rcPaint.right - Paint.rcPaint.left;
+				int Height = Paint.rcPaint.bottom - Paint.rcPaint.top;
+
+				Win32UpdateWindow(DeviceContext);
+
+				EndPaint(Window, &Paint);
+			} break;
     }
     // Pass any unhandled messages to default Windows behavior
     return DefWindowProc(Window, uMsg, wParam, lParam);
